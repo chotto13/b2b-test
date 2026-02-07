@@ -1,0 +1,720 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USERS & AUTH ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  isActive      Boolean   @default(true)
+  emailVerified DateTime?
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret String?
+  
+  // Role
+  role          Role      @default(CLIENT_PRO)
+  
+  // Relations
+  companyId     String?
+  company       Company?  @relation(fields: [companyId], references: [id])
+  
+  // For sales reps - assigned customers
+  assignedCustomers Company[] @relation("SalesRepCustomers")
+  
+  // Carts and Orders
+  carts         Cart[]
+  orders        Order[]
+  savedCarts    SavedCart[]
+  
+  // Support tickets
+  tickets       Ticket[]
+  ticketMessages TicketMessage[]
+  
+  // Audit
+  importJobs    ImportJob[]
+  auditLogs     AuditLog[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Company {
+  id            String    @id @default(cuid())
+  name          String
+  ice           String?   @unique // Identifiant Commun de l'Entreprise
+  ifField       String?   @unique // Identifiant Fiscal
+  rc            String?   // Registre de Commerce
+  cnss          String?   // CNSS number
+  address       String?
+  city          String?
+  phone         String?
+  email         String?
+  
+  // B2B specific
+  isApproved    Boolean   @default(false)
+  approvalStatus ApprovalStatus @default(PENDING)
+  paymentTerms  PaymentTerms @default(TRANSFER_30)
+  
+  // Pricing
+  priceListId   String?
+  priceList     PriceList? @relation(fields: [priceListId], references: [id])
+  
+  // Relations
+  users         User[]
+  
+  // Sales rep assignment
+  salesRepId    String?
+  salesRep      User?     @relation("SalesRepCustomers", fields: [salesRepId], references: [id])
+  
+  // Addresses
+  addresses     Address[]
+  
+  // Orders
+  orders        Order[]
+  
+  // Invoices
+  invoices      Invoice[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("companies")
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Pharmacie Principale", "Entrepôt"
+  address     String
+  city        String
+  postalCode  String?
+  country     String   @default("Maroc")
+  isDefault   Boolean  @default(false)
+  
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("addresses")
+}
+
+// ==================== PRODUCTS & CATALOG ====================
+
+model Category {
+  id            String    @id @default(cuid())
+  nameFr        String
+  nameAr        String?
+  nameEn        String?
+  slug          String    @unique
+  descriptionFr String?
+  descriptionAr String?
+  descriptionEn String?
+  image         String?
+  isActive      Boolean   @default(true)
+  
+  // Tree structure
+  parentId      String?
+  parent        Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children      Category[] @relation("CategoryHierarchy")
+  
+  // Relations
+  products      Product[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("categories")
+}
+
+model Brand {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  logo        String?
+  description String?
+  isActive    Boolean   @default(true)
+  
+  products    Product[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("brands")
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  sku             String    @unique
+  barcode         String?   @unique
+  nameFr          String
+  nameAr          String?
+  nameEn          String?
+  slug            String    @unique
+  descriptionFr   String?
+  descriptionAr   String?
+  descriptionEn   String?
+  
+  // B2B specific
+  unit            UnitType  @default(UNIT)
+  packSize        Int       @default(1) // e.g., 12 units per carton
+  moq             Int       @default(1) // Minimum Order Quantity
+  
+  // Pricing
+  basePrice       Decimal   @db.Decimal(10, 2)
+  taxRate         Decimal   @default(0.20) @db.Decimal(5, 2) // 20% VAT in Morocco
+  
+  // Stock
+  stockQuantity   Int       @default(0)
+  lowStockThreshold Int     @default(10)
+  
+  // Status
+  isActive        Boolean   @default(true)
+  
+  // Relations
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id])
+  
+  brandId         String?
+  brand           Brand?    @relation(fields: [brandId], references: [id])
+  
+  images          ProductImage[]
+  variants        ProductVariant[]
+  
+  // Pricing overrides
+  customerPrices  CustomerPrice[]
+  
+  // Promotions
+  promotions      Promotion[]
+  
+  // Order items
+  orderItems      OrderItem[]
+  
+  // Cart items
+  cartItems       CartItem[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("products")
+}
+
+model ProductImage {
+  id          String   @id @default(cuid())
+  url         String
+  alt         String?
+  sortOrder   Int      @default(0)
+  isPrimary   Boolean  @default(false)
+  
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "50ml", "100ml"
+  sku         String   @unique
+  barcode     String?  @unique
+  price       Decimal  @db.Decimal(10, 2)
+  stockQuantity Int    @default(0)
+  
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("product_variants")
+}
+
+// ==================== PRICING ====================
+
+model PriceList {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  isDefault     Boolean   @default(false)
+  
+  // Relations
+  companies     Company[]
+  customerPrices CustomerPrice[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("price_lists")
+}
+
+model CustomerPrice {
+  id          String    @id @default(cuid())
+  price       Decimal   @db.Decimal(10, 2)
+  
+  // Can be specific to a company OR a price list
+  companyId   String?
+  company     Company?  @relation(fields: [companyId], references: [id])
+  
+  priceListId String?
+  priceList   PriceList? @relation(fields: [priceListId], references: [id])
+  
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([companyId, productId])
+  @@unique([priceListId, productId])
+  @@map("customer_prices")
+}
+
+model Promotion {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  discountType DiscountType @default(PERCENTAGE)
+  discountValue Decimal   @db.Decimal(10, 2)
+  
+  startDate   DateTime
+  endDate     DateTime?
+  
+  isActive    Boolean   @default(true)
+  
+  // Relations
+  products    Product[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("promotions")
+}
+
+// ==================== INVENTORY ====================
+
+model Warehouse {
+  id          String    @id @default(cuid())
+  name        String
+  code        String    @unique
+  address     String?
+  city        String?
+  isPrimary   Boolean   @default(false)
+  
+  inventory   Inventory[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("warehouses")
+}
+
+model Inventory {
+  id          String    @id @default(cuid())
+  quantity    Int       @default(0)
+  reserved    Int       @default(0) // Reserved for orders
+  
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([warehouseId, productId])
+  @@map("inventory")
+}
+
+// ==================== CARTS ====================
+
+model Cart {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  items       CartItem[]
+  
+  // For sales reps ordering on behalf
+  onBehalfOfCompanyId String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("carts")
+}
+
+model CartItem {
+  id          String   @id @default(cuid())
+  quantity    Int
+  
+  cartId      String
+  cart        Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  
+  variantId   String?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("cart_items")
+}
+
+model SavedCart {
+  id          String   @id @default(cuid())
+  name        String   // User-defined name
+  items       Json     // Array of {productId, quantity, variantId?}
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("saved_carts")
+}
+
+// ==================== ORDERS ====================
+
+model Order {
+  id              String    @id @default(cuid())
+  orderNumber     String    @unique
+  
+  // Status workflow
+  status          OrderStatus @default(CREATED)
+  statusHistory   StatusHistory[]
+  
+  // Totals
+  subtotal        Decimal   @db.Decimal(10, 2)
+  taxAmount       Decimal   @db.Decimal(10, 2)
+  total           Decimal   @db.Decimal(10, 2)
+  
+  // Payment
+  paymentTerms    PaymentTerms
+  paymentStatus   PaymentStatus @default(PENDING)
+  
+  // Relations
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id])
+  
+  // Shipping
+  shippingAddress Json      // Snapshot of address
+  
+  // For sales reps
+  placedBySalesRep Boolean @default(false)
+  salesRepId      String?
+  
+  // Items
+  items           OrderItem[]
+  
+  // Documents
+  invoices        Invoice[]
+  deliveryNotes   DeliveryNote[]
+  
+  // Notes
+  customerNote    String?
+  internalNote    String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  
+  variantId   String?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id])
+  
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2) // Price at time of order
+  totalPrice  Decimal  @db.Decimal(10, 2)
+  
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+
+  @@map("order_items")
+}
+
+model StatusHistory {
+  id          String   @id @default(cuid())
+  status      OrderStatus
+  note        String?
+  
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  createdBy   String?  // User ID or "system"
+  createdAt   DateTime @default(now())
+
+  @@map("status_history")
+}
+
+// ==================== DOCUMENTS ====================
+
+model Invoice {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  amount      Decimal  @db.Decimal(10, 2)
+  pdfUrl      String?
+  
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  issueDate   DateTime @default(now())
+  dueDate     DateTime?
+  paidAt      DateTime?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("invoices")
+}
+
+model DeliveryNote {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  pdfUrl      String?
+  
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  
+  trackingNumber String?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("delivery_notes")
+}
+
+model CreditNote {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  amount      Decimal  @db.Decimal(10, 2)
+  reason      String
+  pdfUrl      String?
+  
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  createdAt   DateTime @default(now())
+
+  @@map("credit_notes")
+}
+
+// ==================== SUPPORT TICKETS ====================
+
+model Ticket {
+  id          String    @id @default(cuid())
+  number      String    @unique
+  subject     String
+  description String
+  
+  status      TicketStatus @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  category    TicketCategory
+  
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  
+  messages    TicketMessage[]
+  
+  assignedTo  String?   // Admin user ID
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id          String   @id @default(cuid())
+  content     String
+  isInternal  Boolean  @default(false) // Internal notes vs customer-visible
+  
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  attachments Json?    // Array of file URLs
+  
+  createdAt   DateTime @default(now())
+
+  @@map("ticket_messages")
+}
+
+// ==================== IMPORT/EXPORT & AUDIT ====================
+
+model ImportJob {
+  id            String    @id @default(cuid())
+  type          ImportType
+  fileName      String
+  fileUrl       String?
+  
+  status        ImportStatus @default(PENDING)
+  
+  // Stats
+  totalRows     Int       @default(0)
+  successRows   Int       @default(0)
+  errorRows     Int       @default(0)
+  
+  // Preview data
+  previewData   Json?     // For validation screen
+  errors        Json?     // Array of errors
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  
+  executedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@map("import_jobs")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String   // e.g., "PRODUCT_IMPORT", "ORDER_CREATED"
+  entityType  String   // e.g., "Product", "Order"
+  entityId    String?  
+  oldValues   Json?
+  newValues   Json?
+  metadata    Json?
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// ==================== ENUMS ====================
+
+enum Role {
+  CLIENT_PRO
+  SALES_REP
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentTerms {
+  CASH
+  TRANSFER_30
+  TRANSFER_45
+  TRANSFER_60
+  CHEQUE_30
+  CHEQUE_45
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum UnitType {
+  UNIT      // Unité
+  CARTON    // Carton
+  BOX       // Boîte
+  PALLET    // Palette
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum OrderStatus {
+  CREATED       // Commande créée
+  CONFIRMED     // Confirmée
+  PREPARING     // En préparation
+  PREPARED      // Préparée
+  SHIPPED       // Expédiée
+  DELIVERED     // Livrée
+  CANCELLED     // Annulée
+  REFUNDED      // Remboursée
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  ORDER_ISSUE
+  PRODUCT_QUESTION
+  SHIPPING
+  INVOICING
+  ACCOUNT
+  TECHNICAL
+  OTHER
+}
+
+enum ImportType {
+  PRODUCT_FULL
+  PRODUCT_STOCK
+  PRODUCT_PRICE
+  CUSTOMER
+}
+
+enum ImportStatus {
+  PENDING
+  VALIDATING
+  VALIDATED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
