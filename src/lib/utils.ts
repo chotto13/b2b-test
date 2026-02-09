@@ -5,20 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Format currency in Moroccan format (MAD / DH)
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('fr-MA', {
-    style: 'currency',
-    currency: 'MAD',
+// Format currency in Moroccan format (DH)
+export function formatCurrency(amount: number | Decimal | string): string {
+  const num = typeof amount === 'string' ? parseFloat(amount) : Number(amount)
+  return new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount).replace('MAD', 'DH')
+  }).format(num) + ' DH'
 }
 
-// Format date in French (Morocco)
+// Format date in French
 export function formatDate(date: Date | string): string {
   return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
+    day: 'numeric',
     month: 'long',
     year: 'numeric',
   }).format(new Date(date))
@@ -33,12 +32,23 @@ export function formatDateShort(date: Date | string): string {
   }).format(new Date(date))
 }
 
-// Format number with French locale
+// Format date with time
+export function formatDateTime(date: Date | string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(date))
+}
+
+// Format number
 export function formatNumber(num: number): string {
   return new Intl.NumberFormat('fr-FR').format(num)
 }
 
-// Generate order number
+// Generate order number: CMD-YYMM-XXXX
 export function generateOrderNumber(): string {
   const date = new Date()
   const year = date.getFullYear().toString().slice(-2)
@@ -47,7 +57,7 @@ export function generateOrderNumber(): string {
   return `CMD-${year}${month}-${random}`
 }
 
-// Generate invoice number
+// Generate invoice number: FAC-YYYY-MM-XXXX
 export function generateInvoiceNumber(): string {
   const date = new Date()
   const year = date.getFullYear()
@@ -62,13 +72,6 @@ export function generateTicketNumber(): string {
   const year = date.getFullYear().toString().slice(-2)
   const random = Math.floor(10000 + Math.random() * 90000)
   return `TICK-${year}-${random}`
-}
-
-// Generate import job number
-export function generateImportJobNumber(): string {
-  const date = new Date()
-  const timestamp = date.getTime().toString().slice(-8)
-  return `IMP-${timestamp}`
 }
 
 // Format payment terms
@@ -99,19 +102,31 @@ export function formatOrderStatus(status: string): string {
   return statusMap[status] || status
 }
 
-// Get order status color
+// Get order status color class
 export function getOrderStatusColor(status: string): string {
   const colorMap: Record<string, string> = {
-    'CREATED': 'bg-gray-100 text-gray-800',
-    'CONFIRMED': 'bg-blue-100 text-blue-800',
-    'PREPARING': 'bg-yellow-100 text-yellow-800',
-    'PREPARED': 'bg-indigo-100 text-indigo-800',
-    'SHIPPED': 'bg-purple-100 text-purple-800',
-    'DELIVERED': 'bg-green-100 text-green-800',
-    'CANCELLED': 'bg-red-100 text-red-800',
-    'REFUNDED': 'bg-orange-100 text-orange-800',
+    'CREATED': 'bg-slate-100 text-slate-700 border-slate-200',
+    'CONFIRMED': 'bg-blue-50 text-blue-700 border-blue-200',
+    'PREPARING': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    'PREPARED': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    'SHIPPED': 'bg-purple-50 text-purple-700 border-purple-200',
+    'DELIVERED': 'bg-green-50 text-green-700 border-green-200',
+    'CANCELLED': 'bg-red-50 text-red-700 border-red-200',
+    'REFUNDED': 'bg-orange-50 text-orange-700 border-orange-200',
   }
-  return colorMap[status] || 'bg-gray-100 text-gray-800'
+  return colorMap[status] || 'bg-slate-100 text-slate-700'
+}
+
+// Format invoice status
+export function formatInvoiceStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    'UNPAID': 'Non payée',
+    'PARTIAL': 'Partiellement payée',
+    'PAID': 'Payée',
+    'OVERDUE': 'En retard',
+    'CANCELLED': 'Annulée',
+  }
+  return statusMap[status] || status
 }
 
 // Format ticket status
@@ -148,19 +163,19 @@ export function formatUnitType(unit: string): string {
   return unitMap[unit] || unit
 }
 
-// Parse Excel/CSV file (helper)
-export function parseImportFile(buffer: Buffer, mimeType: string): any[] {
-  // This will be implemented with the xlsx library
-  // Placeholder for now
-  return []
+// Truncate text
+export function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength) + '...'
 }
 
-// Validate SKU format
-export function isValidSKU(sku: string): boolean {
-  return /^[A-Z0-9_-]+$/i.test(sku) && sku.length >= 3
+// Sleep function for delays
+export function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// Validate barcode
-export function isValidBarcode(barcode: string): boolean {
-  return /^[0-9]{8,13}$/.test(barcode)
+// Type for Decimal from Prisma
+type Decimal = {
+  toNumber(): number
+  toString(): string
 }

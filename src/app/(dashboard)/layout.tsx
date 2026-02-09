@@ -12,7 +12,7 @@ export default function DashboardLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <Header onMenuToggle={() => setIsSidebarOpen(true)} />
       <div className="flex">
         <Sidebar

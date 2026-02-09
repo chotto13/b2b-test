@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,16 +13,89 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Plus, MessageCircle, Clock, CheckCircle, AlertCircle, Eye } from "lucide-react"
+import { Plus, MessageCircle, Clock, CheckCircle, Eye, Loader2 } from "lucide-react"
 import { formatDateShort, formatTicketPriority, formatTicketStatus } from "@/lib/utils"
 
-const tickets = [
-  { id: "1", number: "TICK-24-001", subject: "Problème avec la commande CMD-2401-1234", category: "ORDER_ISSUE", status: "RESOLVED", priority: "HIGH", createdAt: "2024-01-15", lastUpdate: "2024-01-16" },
-  { id: "2", number: "TICK-24-002", subject: "Question sur produit Effaclar", category: "PRODUCT_QUESTION", status: "OPEN", priority: "MEDIUM", createdAt: "2024-01-20", lastUpdate: "2024-01-20" },
-  { id: "3", number: "TICK-24-003", subject: "Demande de changement d'adresse", category: "ACCOUNT", status: "IN_PROGRESS", priority: "LOW", createdAt: "2024-01-22", lastUpdate: "2024-01-23" },
-]
+interface Ticket {
+  id: string
+  ticketNumber: string
+  subject: string
+  category: string
+  status: string
+  priority: string
+  createdAt: string
+  updatedAt: string
+  _count: {
+    messages: number
+  }
+}
 
 export default function SupportPage() {
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchTickets()
+  }, [])
+
+  async function fetchTickets() {
+    try {
+      setLoading(true)
+      const res = await fetch("/api/tickets")
+      if (!res.ok) throw new Error("Failed to fetch tickets")
+
+      const data = await res.json()
+      setTickets(data.tickets)
+    } catch (error) {
+      console.error("Error fetching tickets:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function getStatusBadgeVariant(status: string) {
+    switch (status) {
+      case "RESOLVED":
+      case "CLOSED":
+        return "success"
+      case "OPEN":
+        return "warning"
+      case "IN_PROGRESS":
+        return "default"
+      case "WAITING_CUSTOMER":
+        return "secondary"
+      default:
+        return "default"
+    }
+  }
+
+  function getPriorityBadgeVariant(priority: string) {
+    switch (priority) {
+      case "URGENT":
+        return "destructive"
+      case "HIGH":
+        return "warning"
+      case "MEDIUM":
+        return "secondary"
+      case "LOW":
+        return "outline"
+      default:
+        return "secondary"
+    }
+  }
+
+  function getCategoryLabel(category: string) {
+    const labels: Record<string, string> = {
+      ORDER_ISSUE: "Problème de commande",
+      PRODUCT_QUESTION: "Question produit",
+      ACCOUNT: "Compte",
+      BILLING: "Facturation",
+      TECHNICAL: "Technique",
+      OTHER: "Autre",
+    }
+    return labels[category] || category
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -82,67 +155,67 @@ export default function SupportPage() {
           <CardDescription>Historique de vos demandes de support</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>N° Ticket</TableHead>
-                <TableHead>Sujet</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Priorité</TableHead>
-                <TableHead>Créé le</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tickets.map((ticket) => (
-                <TableRow key={ticket.id}>
-                  <TableCell className="font-medium">{ticket.number}</TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{ticket.subject}</p>
-                      <p className="text-xs text-gray-500">{ticket.category}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        ticket.status === "RESOLVED" || ticket.status === "CLOSED"
-                          ? "success"
-                          : ticket.status === "OPEN"
-                          ? "warning"
-                          : "default"
-                      }
-                    >
-                      {formatTicketStatus(ticket.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        ticket.priority === "URGENT"
-                          ? "danger"
-                          : ticket.priority === "HIGH"
-                          ? "warning"
-                          : "secondary"
-                      }
-                    >
-                      {formatTicketPriority(ticket.priority)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{formatDateShort(ticket.createdAt)}</TableCell>
-                  <TableCell>
-                    <div className="flex justify-end">
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/support/${ticket.id}`}>
-                          <Eye className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </TableCell>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>N° Ticket</TableHead>
+                  <TableHead>Sujet</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Priorité</TableHead>
+                  <TableHead>Créé le</TableHead>
+                  <TableHead>Messages</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {tickets.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                      Aucun ticket trouvé. Créez votre premier ticket ci-dessus.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  tickets.map((ticket) => (
+                    <TableRow key={ticket.id}>
+                      <TableCell className="font-medium">{ticket.ticketNumber}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{ticket.subject}</p>
+                          <p className="text-xs text-gray-500">{getCategoryLabel(ticket.category)}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(ticket.status)}>
+                          {formatTicketStatus(ticket.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getPriorityBadgeVariant(ticket.priority)}>
+                          {formatTicketPriority(ticket.priority)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDateShort(ticket.createdAt)}</TableCell>
+                      <TableCell>{ticket._count.messages}</TableCell>
+                      <TableCell>
+                        <div className="flex justify-end">
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href={`/support/${ticket.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,6 +21,9 @@ import {
   Trash2,
   FileSpreadsheet,
   Package,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
@@ -37,17 +41,40 @@ interface QuickOrderItem {
 }
 
 export default function QuickOrderPage() {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
   const [items, setItems] = useState<QuickOrderItem[]>([])
   const [pasteData, setPasteData] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importErrors, setImportErrors] = useState<string[]>([])
+  const [submitting, setSubmitting] = useState(false)
 
-  // Mock search results
-  const searchResults = searchQuery.length >= 2 ? [
-    { id: "1", sku: "LP-001", name: "Effaclar Gel Moussant", brand: "La Roche-Posay", price: 125.5, stock: 45, packSize: 12, moq: 12 },
-    { id: "2", sku: "AV-002", name: "Eau Thermale 300ml", brand: "Avène", price: 89, stock: 120, packSize: 12, moq: 12 },
-  ] : []
+  // Debounce search
+  async function handleSearch(value: string) {
+    setSearchQuery(value)
+    if (value.length < 2) {
+      setSearchResults([])
+      return
+    }
 
-  const handleAddItem = (product: typeof searchResults[0]) => {
+    try {
+      setSearching(true)
+      const res = await fetch(`/api/quick-order/search?q=${encodeURIComponent(value)}`)
+      if (!res.ok) throw new Error("Search failed")
+      
+      const data = await res.json()
+      setSearchResults(data.products)
+    } catch (error) {
+      console.error("Search error:", error)
+      setSearchResults([])
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleAddItem = (product: any) => {
     const existing = items.find((item) => item.productId === product.id)
     if (existing) {
       setItems(items.map((item) =>
@@ -70,6 +97,7 @@ export default function QuickOrderPage() {
       }])
     }
     setSearchQuery("")
+    setSearchResults([])
   }
 
   const handleRemoveItem = (id: string) => {
@@ -92,34 +120,99 @@ export default function QuickOrderPage() {
     }
   }
 
-  const handlePasteImport = () => {
+  const handlePasteImport = async () => {
+    if (!pasteData.trim()) return
+
     // Parse paste data (format: SKU,Qty or SKU Qty)
     const lines = pasteData.trim().split('\n')
-    const newItems: QuickOrderItem[] = []
-    
-    lines.forEach((line) => {
-      const parts = line.split(/[,\t]/).map(p => p.trim())
-      if (parts.length >= 1) {
-        const sku = parts[0]
-        const qty = parseInt(parts[1]) || 1
-        // In real app, fetch product by SKU
-        newItems.push({
-          id: Math.random().toString(36).substr(2, 9),
-          productId: sku,
-          sku: sku,
-          name: "Produit " + sku,
-          brand: "Marque",
-          unitPrice: 100,
-          quantity: qty,
-          packSize: 12,
-          moq: 12,
-          stockQuantity: 50,
-        })
+    const parsedItems = lines
+      .map((line) => {
+        const parts = line.split(/[,\t]/).map(p => p.trim())
+        if (parts.length >= 1) {
+          const sku = parts[0]
+          const qty = parseInt(parts[1]) || 1
+          return { sku, quantity: qty }
+        }
+        return null
+      })
+      .filter(Boolean) as { sku: string; quantity: number }[]
+
+    if (parsedItems.length === 0) return
+
+    try {
+      setImporting(true)
+      setImportErrors([])
+
+      const res = await fetch("/api/quick-order/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: parsedItems }),
+      })
+
+      if (!res.ok) throw new Error("Import failed")
+
+      const data = await res.json()
+
+      // Add found items
+      const newItems = data.items.map((product: any) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        productId: product.id,
+        sku: product.sku,
+        name: product.name,
+        brand: product.brand,
+        unitPrice: product.unitPrice,
+        quantity: product.quantity,
+        packSize: product.packSize,
+        moq: product.moq,
+        stockQuantity: product.stockQuantity,
+      }))
+
+      setItems([...items, ...newItems])
+
+      // Show errors
+      const errors = [
+        ...data.notFound.map((sku: string) => `Produit non trouvé: ${sku}`),
+        ...data.invalidQuantity,
+      ]
+      setImportErrors(errors)
+      setPasteData("")
+    } catch (error) {
+      console.error("Import error:", error)
+      setImportErrors(["Erreur lors de l'importation"])
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleSubmitOrder = async () => {
+    if (items.length === 0) return
+
+    try {
+      setSubmitting(true)
+      const res = await fetch("/api/quick-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to create order")
       }
-    })
-    
-    setItems([...items, ...newItems])
-    setPasteData("")
+
+      const data = await res.json()
+      router.push(`/commandes/${data.order.id}`)
+    } catch (error) {
+      console.error("Order error:", error)
+      alert(error instanceof Error ? error.message : "Erreur lors de la création de la commande")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const subtotal = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0)
@@ -155,10 +248,13 @@ export default function QuickOrderPage() {
                 <input
                   type="search"
                   placeholder="Rechercher un produit..."
-                  className="h-10 w-full rounded-lg border border-gray-200 pl-10 pr-4 text-sm outline-none focus:border-blue-500"
+                  className="h-10 w-full rounded-lg border border-gray-200 pl-10 pr-4 text-sm text-slate-900 outline-none focus:border-blue-500"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => handleSearch(e.target.value)}
                 />
+                {searching && (
+                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+                )}
               </div>
 
               {/* Search Results */}
@@ -192,6 +288,11 @@ export default function QuickOrderPage() {
                   ))}
                 </div>
               )}
+              {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+                <p className="mt-4 text-sm text-gray-500 text-center">
+                  Aucun produit trouvé
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -208,18 +309,37 @@ export default function QuickOrderPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <textarea
-                className="h-32 w-full rounded-lg border border-gray-200 p-3 text-sm outline-none focus:border-blue-500"
+                className="h-32 w-full rounded-lg border border-gray-200 p-3 text-sm text-slate-900 outline-none focus:border-blue-500"
                 placeholder="LP-001,24&#10;AV-002,12&#10;BI-003,36"
                 value={pasteData}
                 onChange={(e) => setPasteData(e.target.value)}
               />
               <Button
                 onClick={handlePasteImport}
-                disabled={!pasteData.trim()}
+                disabled={!pasteData.trim() || importing}
               >
-                <Upload className="mr-2 h-4 w-4" />
+                {importing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
                 Importer la liste
               </Button>
+
+              {/* Import Results */}
+              {importErrors.length > 0 && (
+                <div className="rounded-lg bg-yellow-50 p-3 space-y-1">
+                  <div className="flex items-center gap-2 text-yellow-800">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="font-medium">Problèmes lors de l&apos;import:</span>
+                  </div>
+                  <ul className="text-sm text-yellow-700 list-disc list-inside">
+                    {importErrors.map((error, i) => (
+                      <li key={i}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -281,7 +401,7 @@ export default function QuickOrderPage() {
                             </Button>
                             <Input
                               type="number"
-                              className="h-8 w-16 text-center"
+                              className="h-8 w-16 text-center text-slate-900"
                               value={item.quantity}
                               onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 0)}
                               min={item.moq}
@@ -350,14 +470,20 @@ export default function QuickOrderPage() {
               </div>
               <Button
                 className="w-full"
-                disabled={items.length === 0}
+                disabled={items.length === 0 || submitting}
+                onClick={handleSubmitOrder}
               >
+                {submitting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                )}
                 Passer la commande
               </Button>
               <Button
                 variant="outline"
                 className="w-full"
-                disabled={items.length === 0}
+                disabled={items.length === 0 || submitting}
               >
                 Sauvegarder le panier
               </Button>

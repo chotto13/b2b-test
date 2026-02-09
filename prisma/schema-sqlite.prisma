@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  password          String
+  firstName         String
+  lastName          String
+  phone             String?
+  isActive          Boolean   @default(true)
+  role              String    @default("CLIENT_PRO")
+  companyId         String?
+  company           Company?  @relation(fields: [companyId], references: [id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Company {
+  id                String    @id @default(cuid())
+  name              String
+  ice               String?   @unique
+  ifField           String?   @unique
+  rc                String?   
+  isApproved        Boolean   @default(false)
+  approvalStatus    String    @default("PENDING")
+  paymentTerms      String    @default("TRANSFER_30")
+  users             User[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  sku             String    @unique
+  name            String
+  description     String?
+  basePrice       Float
+  promoPrice      Float?
+  stockQuantity   Int       @default(0)
+  moq             Int       @default(1)
+  packSize        Int       @default(1)
+  vatRate         Float     @default(0.20)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Order {
+  id              String    @id @default(cuid())
+  orderNumber     String    @unique
+  status          String    @default("CREATED")
+  subtotal        Float
+  vatAmount       Float
+  total           Float
+  paymentTerms    String
+  paymentStatus   String    @default("PENDING")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}

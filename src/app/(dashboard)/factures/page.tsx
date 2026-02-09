@@ -1,9 +1,10 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -12,17 +13,95 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Download, FileText, Search, Eye } from "lucide-react"
-import { formatCurrency, formatDateShort } from "@/lib/utils"
+import { Download, FileText, Search, Eye, Loader2 } from "lucide-react"
+import { formatCurrency, formatDateShort, formatInvoiceStatus } from "@/lib/utils"
 
-const invoices = [
-  { id: "1", number: "FAC-2024-0123", orderNumber: "CMD-2401-1234", amount: 15420, date: "2024-01-15", dueDate: "2024-02-15", status: "PAID" },
-  { id: "2", number: "FAC-2024-0124", orderNumber: "CMD-2401-1235", amount: 8750, date: "2024-01-18", dueDate: "2024-02-18", status: "PAID" },
-  { id: "3", number: "FAC-2024-0125", orderNumber: "CMD-2401-1236", amount: 23100, date: "2024-01-20", dueDate: "2024-02-20", status: "PENDING" },
-  { id: "4", number: "FAC-2024-0126", orderNumber: "CMD-2401-1237", amount: 5600, date: "2024-01-22", dueDate: "2024-02-22", status: "PENDING" },
-]
+interface Invoice {
+  id: string
+  invoiceNumber: string
+  order: { orderNumber: string }
+  total: number
+  issueDate: string
+  dueDate: string
+  status: string
+  _count: { payments: number }
+}
+
+interface InvoiceStats {
+  totalInvoiced: number
+  pendingAmount: number
+  lastPayment: number
+}
 
 export default function InvoicesPage() {
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [stats, setStats] = useState<InvoiceStats>({
+    totalInvoiced: 0,
+    pendingAmount: 0,
+    lastPayment: 0,
+  })
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+
+  useEffect(() => {
+    fetchInvoices()
+  }, [statusFilter])
+
+  async function fetchInvoices() {
+    try {
+      setLoading(true)
+      const url = new URL("/api/invoices", window.location.origin)
+      if (statusFilter) url.searchParams.set("status", statusFilter)
+
+      const res = await fetch(url)
+      if (!res.ok) throw new Error("Failed to fetch invoices")
+
+      const data = await res.json()
+      setInvoices(data.invoices)
+
+      // Calculate stats from invoices
+      const totalInvoiced = data.invoices.reduce(
+        (sum: number, inv: Invoice) => sum + Number(inv.total),
+        0
+      )
+      const pendingAmount = data.invoices
+        .filter((inv: Invoice) => inv.status === "UNPAID" || inv.status === "OVERDUE")
+        .reduce((sum: number, inv: Invoice) => sum + Number(inv.total), 0)
+
+      setStats({
+        totalInvoiced,
+        pendingAmount,
+        lastPayment: 0, // Would need payment history
+      })
+    } catch (error) {
+      console.error("Error fetching invoices:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function getStatusBadgeVariant(status: string) {
+    switch (status) {
+      case "PAID":
+        return "success"
+      case "PARTIAL":
+        return "warning"
+      case "UNPAID":
+        return "secondary"
+      case "OVERDUE":
+        return "destructive"
+      default:
+        return "secondary"
+    }
+  }
+
+  const filteredInvoices = invoices.filter(
+    (inv) =>
+      inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      inv.order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
     <div className="space-y-6">
       <div>
@@ -34,20 +113,22 @@ export default function InvoicesPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="p-6">
-            <p className="text-sm font-medium text-gray-500">Total facturé (année)</p>
-            <p className="mt-2 text-2xl font-bold">{formatCurrency(156000)}</p>
+            <p className="text-sm font-medium text-gray-500">Total facturé</p>
+            <p className="mt-2 text-2xl font-bold">{formatCurrency(stats.totalInvoiced)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6">
             <p className="text-sm font-medium text-gray-500">En attente de paiement</p>
-            <p className="mt-2 text-2xl font-bold text-orange-600">{formatCurrency(28700)}</p>
+            <p className="mt-2 text-2xl font-bold text-orange-600">
+              {formatCurrency(stats.pendingAmount)}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6">
-            <p className="text-sm font-medium text-gray-500">Dernier paiement</p>
-            <p className="mt-2 text-2xl font-bold text-green-600">{formatCurrency(24170)}</p>
+            <p className="text-sm font-medium text-gray-500">Nombre de factures</p>
+            <p className="mt-2 text-2xl font-bold text-blue-600">{invoices.length}</p>
           </CardContent>
         </Card>
       </div>
@@ -61,14 +142,21 @@ export default function InvoicesPage() {
               <input
                 type="search"
                 placeholder="Rechercher une facture..."
-                className="h-10 w-full rounded-lg border border-gray-200 pl-10 pr-4 text-sm"
+                className="h-10 w-full rounded-lg border border-gray-200 pl-10 pr-4 text-sm text-slate-900"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <select className="h-10 rounded-lg border border-gray-200 px-3 text-sm">
-              <option>Tous les statuts</option>
-              <option>Payées</option>
-              <option>En attente</option>
-              <option>En retard</option>
+            <select
+              className="h-10 rounded-lg border border-gray-200 px-3 text-sm text-slate-900"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="">Tous les statuts</option>
+              <option value="PAID">Payées</option>
+              <option value="UNPAID">Non payées</option>
+              <option value="PARTIAL">Partiellement payées</option>
+              <option value="OVERDUE">En retard</option>
             </select>
           </div>
         </CardContent>
@@ -80,49 +168,65 @@ export default function InvoicesPage() {
           <CardTitle>Liste des factures</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>N° Facture</TableHead>
-                <TableHead>N° Commande</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Échéance</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Montant</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoices.map((invoice) => (
-                <TableRow key={invoice.id}>
-                  <TableCell className="font-medium">{invoice.number}</TableCell>
-                  <TableCell>{invoice.orderNumber}</TableCell>
-                  <TableCell>{formatDateShort(invoice.date)}</TableCell>
-                  <TableCell>{formatDateShort(invoice.dueDate)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={invoice.status === "PAID" ? "success" : "warning"}
-                    >
-                      {invoice.status === "PAID" ? "Payée" : "En attente"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatCurrency(invoice.amount)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>N° Facture</TableHead>
+                  <TableHead>N° Commande</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Échéance</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredInvoices.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                      Aucune facture trouvée
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredInvoices.map((invoice) => (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                      <TableCell>{invoice.order.orderNumber}</TableCell>
+                      <TableCell>{formatDateShort(invoice.issueDate)}</TableCell>
+                      <TableCell>{formatDateShort(invoice.dueDate)}</TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(invoice.status)}>
+                          {formatInvoiceStatus(invoice.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(invoice.total)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href={`/factures/${invoice.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href={`/api/invoices/${invoice.id}/pdf`} target="_blank">
+                              <Download className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
