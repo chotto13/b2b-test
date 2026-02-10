@@ -25,7 +25,15 @@ import {
   MapPin,
   Printer,
 } from "lucide-react"
-import { formatCurrency, formatDate, getOrderStatusColor, formatOrderStatus, formatPaymentTerms } from "@/lib/utils"
+import { formatCurrency, formatDate, formatOrderStatus, formatPaymentTerms } from "@/lib/utils"
+
+interface ShippingAddress {
+  name: string
+  address: string
+  city: string
+  postalCode: string
+  country: string
+}
 
 interface Order {
   id: string
@@ -36,7 +44,7 @@ interface Order {
   total: number
   paymentTerms: string
   paymentStatus: string
-  shippingAddress: any
+  shippingAddress: ShippingAddress | null
   customerNote: string | null
   createdAt: string
   items: Array<{

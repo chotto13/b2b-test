@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
+import { useEffect, useState, useCallback } from "react"
+
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,7 +27,6 @@ import {
   Edit,
   Trash2,
   Package,
-  Filter,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { useToast } from "@/components/ui/toast"
@@ -84,9 +83,9 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     fetchProducts()
-  }, [searchQuery, selectedCategory])
+  }, [searchQuery, selectedCategory, fetchProducts])
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -109,7 +108,7 @@ export default function AdminProductsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [searchQuery, selectedCategory])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -145,10 +144,11 @@ export default function AdminProductsPage() {
       setIsModalOpen(false)
       fetchProducts()
       resetForm()
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Impossible de créer le produit"
       addToast({
         title: "Erreur",
-        description: error.message || "Impossible de créer le produit",
+        description: errorMessage,
         variant: "error",
       })
     }

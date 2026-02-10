@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertCircle, Loader2, CheckCircle } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -116,7 +116,7 @@ export default function RegisterPage() {
             <span className="text-2xl font-bold text-white">2A</span>
           </div>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">Deux A Para</h1>
-          <p className="text-slate-500">Demande d'accès professionnel</p>
+          <p className="text-slate-500">Demande d&apos;accès professionnel</p>
         </div>
 
         {/* Progress */}

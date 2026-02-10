@@ -18,7 +18,6 @@ import {
   Minus,
   Plus,
   ChevronDown,
-  Check,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
@@ -80,7 +79,7 @@ export default function CataloguePage() {
       setProducts(data.products)
       setCategories(data.categories)
       setBrands(data.brands)
-    } catch (error) {
+    } catch {
       addToast({
         title: "Erreur",
         description: "Impossible de charger les produits",
@@ -154,7 +153,7 @@ export default function CataloguePage() {
 
       setCart(prev => {
         if (newQty === 0) {
-          const { [product.id]: _, ...rest } = prev
+          const { [product.id]: _removed, ...rest } = prev
           return rest
         }
         return { ...prev, [product.id]: newQty }

@@ -12,10 +12,6 @@ import {
   Users,
   TrendingUp,
   AlertCircle,
-  CheckCircle,
-  Clock,
-  ArrowUpRight,
-  ArrowDownRight,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 

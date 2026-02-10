@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/toast"
@@ -16,7 +16,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -25,11 +24,8 @@ import {
   Upload,
   Download,
   FileSpreadsheet,
-  CheckCircle,
-  AlertCircle,
   X,
   FileText,
-  Eye,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
@@ -51,7 +47,21 @@ const mockImportJobs = [
   { id: "2", type: "PRODUCT_STOCK", fileName: "stock_update.csv", status: "COMPLETED", totalRows: 500, successRows: 500, errorRows: 0, createdAt: "2024-01-14T16:45:00Z" },
 ]
 
-const mockPreviewData = [
+interface PreviewChange {
+  old: string | number | boolean;
+  new: string | number | boolean;
+}
+
+interface PreviewRow {
+  rowNumber: number;
+  sku: string;
+  name: string;
+  action: string;
+  changes: Record<string, PreviewChange>;
+  errors: string[];
+}
+
+const mockPreviewData: PreviewRow[] = [
   { rowNumber: 1, sku: "LP-001", name: "Effaclar Gel", action: "UPDATE", changes: { stock: { old: 40, new: 45 } }, errors: [] },
   { rowNumber: 2, sku: "AV-999", name: "Nouveau Produit", action: "CREATE", changes: {}, errors: [] },
   { rowNumber: 3, sku: "INVALID", name: "", action: "ERROR", changes: {}, errors: ["SKU invalide", "Nom requis"] },
@@ -129,14 +139,14 @@ export default function ImportExportPage() {
     <div className="space-y-6">
       {/* Tabs */}
       <div className="flex gap-2 border-b">
-        {[
-          { id: "import", label: "Importer", icon: Upload },
-          { id: "export", label: "Exporter", icon: Download },
-          { id: "history", label: "Historique", icon: FileText },
-        ].map((tab) => (
+        {([
+          { id: "import" as const, label: "Importer", icon: Upload },
+          { id: "export" as const, label: "Exporter", icon: Download },
+          { id: "history" as const, label: "Historique", icon: FileText },
+        ] as const).map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === tab.id ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"
             }`}
@@ -152,7 +162,7 @@ export default function ImportExportPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Type d'import</CardTitle>
+              <CardTitle>Type d&apos;import</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-3">
@@ -175,7 +185,7 @@ export default function ImportExportPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Mode d'import</CardTitle>
+              <CardTitle>Mode d&apos;import</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex gap-4">
@@ -223,7 +233,7 @@ export default function ImportExportPage() {
                     <p className="mt-4 text-sm text-slate-600">
                       <span className="font-medium text-blue-600">Cliquez pour uploader</span> ou glissez-déposez
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">CSV, XLSX jusqu'à 10MB</p>
+                    <p className="mt-1 text-xs text-slate-500">CSV, XLSX jusqu&apos;à 10MB</p>
                     <input type="file" className="hidden" accept=".csv,.xlsx" onChange={handleFileSelect} />
                   </label>
                 )}
@@ -321,7 +331,7 @@ export default function ImportExportPage() {
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Prévisualisation de l'import</DialogTitle>
+            <DialogTitle>Prévisualisation de l&apos;import</DialogTitle>
           </DialogHeader>
           
           <div className="grid gap-4 sm:grid-cols-3 my-4">
@@ -366,7 +376,7 @@ export default function ImportExportPage() {
                     )}
                     {row.action === "UPDATE" && Object.keys(row.changes).length > 0 && (
                       <div className="text-sm">
-                        {Object.entries(row.changes).map(([field, change]: [string, any]) => (
+                        {Object.entries(row.changes).map(([field, change]: [string, PreviewChange]) => (
                           <div key={field}>{field}: {change.old} → {change.new}</div>
                         ))}
                       </div>

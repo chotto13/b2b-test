@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+
 import {
   Table,
   TableBody,
@@ -40,10 +40,33 @@ interface QuickOrderItem {
   stockQuantity: number
 }
 
+interface SearchProduct {
+  id: string
+  sku: string
+  name: string
+  brand: string
+  price: number
+  stock: number
+  packSize: number
+  moq: number
+}
+
+interface ImportProduct {
+  id: string
+  sku: string
+  name: string
+  brand: string
+  unitPrice: number
+  quantity: number
+  packSize: number
+  moq: number
+  stockQuantity: number
+}
+
 export default function QuickOrderPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<SearchProduct[]>([])
   const [searching, setSearching] = useState(false)
   const [items, setItems] = useState<QuickOrderItem[]>([])
   const [pasteData, setPasteData] = useState("")
@@ -74,7 +97,7 @@ export default function QuickOrderPage() {
     }
   }
 
-  const handleAddItem = (product: any) => {
+  const handleAddItem = (product: SearchProduct) => {
     const existing = items.find((item) => item.productId === product.id)
     if (existing) {
       setItems(items.map((item) =>
@@ -154,7 +177,7 @@ export default function QuickOrderPage() {
       const data = await res.json()
 
       // Add found items
-      const newItems = data.items.map((product: any) => ({
+      const newItems = data.items.map((product: ImportProduct) => ({
         id: Math.random().toString(36).substr(2, 9),
         productId: product.id,
         sku: product.sku,

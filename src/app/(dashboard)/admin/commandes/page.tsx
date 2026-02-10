@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,9 +31,6 @@ import {
   Search,
   Eye,
   Package,
-  Truck,
-  CheckCircle,
-  X,
 } from "lucide-react"
 import { formatCurrency, formatDateShort, getOrderStatusColor, formatOrderStatus } from "@/lib/utils"
 import { useToast } from "@/components/ui/toast"
@@ -80,9 +77,9 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     fetchOrders()
-  }, [statusFilter])
+  }, [statusFilter, fetchOrders])
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -97,7 +94,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [statusFilter])
 
   const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     try {
@@ -113,7 +110,7 @@ export default function AdminOrdersPage() {
       addToast({ title: "Statut mis à jour", variant: "success" })
       fetchOrders()
       setIsModalOpen(false)
-    } catch (error) {
+    } catch {
       addToast({ title: "Erreur", description: "Impossible de mettre à jour", variant: "error" })
     } finally {
       setUpdatingStatus(false)
@@ -248,6 +245,7 @@ export default function AdminOrdersPage() {
                 <Select
                   defaultValue={selectedOrder.status}
                   onValueChange={(value) => handleUpdateStatus(selectedOrder.id, value)}
+                  disabled={updatingStatus}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner un statut" />
